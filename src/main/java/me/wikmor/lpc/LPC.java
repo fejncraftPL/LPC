@@ -1,6 +1,8 @@
 package me.wikmor.lpc;
 
+import io.papermc.paper.event.player.AsyncChatEvent;
 import me.clip.placeholderapi.PlaceholderAPI;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.luckperms.api.LuckPerms;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
@@ -8,7 +10,6 @@ import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -33,7 +34,7 @@ public class LPC extends JavaPlugin implements Listener {
   // ================================================================================
 
   @Override
-  public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
+  public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String @NotNull [] args) {
     if (args.length == 1 && "reload".equals(args[0])) {
       reloadConfig();
 
@@ -45,7 +46,7 @@ public class LPC extends JavaPlugin implements Listener {
   }
 
   @Override
-  public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String[] args) {
+  public List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command, @NotNull String alias, @NotNull String @NotNull [] args) {
     if (args.length == 1)
       return List.of("reload");
 
@@ -57,7 +58,7 @@ public class LPC extends JavaPlugin implements Listener {
   // ================================================================================
 
   @EventHandler(priority = EventPriority.LOWEST)
-  public void onChat(AsyncPlayerChatEvent event) {
+  public void onChat(AsyncChatEvent event) {
     var player = event.getPlayer();
 
     var metaData = this.luckPerms.getPlayerAdapter(Player.class).getMetaData(player);
@@ -71,17 +72,13 @@ public class LPC extends JavaPlugin implements Listener {
     if (format == null)
       return;
 
-    var message = enableColors(event.getMessage(), player.hasPermission("lpc.colorcodes"), player.hasPermission("lpc.rgbcodes"));
-
-    event.setMessage(message);
+    if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI"))
+      format = PlaceholderAPI.setPlaceholders(player, format);
 
     format = replaceVariables(format, variableName -> {
       String value;
 
       switch (variableName) {
-        case "message":
-          return message;
-
         case "prefix":
           value = metaData.getPrefix();
           break;
@@ -107,7 +104,7 @@ public class LPC extends JavaPlugin implements Listener {
           break;
 
         case "displayname":
-          value = player.getDisplayName();
+          value = LegacyComponentSerializer.legacySection().serialize(player.displayName());
           break;
 
         case "username-color":
@@ -128,13 +125,25 @@ public class LPC extends JavaPlugin implements Listener {
       return value;
     });
 
-    if (getServer().getPluginManager().isPluginEnabled("PlaceholderAPI"))
-      format = PlaceholderAPI.setPlaceholders(player, format);
-
+    // Enable colors on all placeholders but the message - LPC prefixes contain ampersand-sequences.
     format = enableColors(format, true, true);
 
-    // NOTE: In contrast to the prior implementation, we do not escape % - that's up to the user, as to provide more flexibility.
-    event.setFormat(format);
+    // Colors are enabled based on player-permissions at the last stage of building the final format.
+    format = replaceVariables(format, variableName -> {
+      if (variableName.equals("message")) {
+        return enableColors(
+          LegacyComponentSerializer.legacySection().serialize(event.message()),
+          player.hasPermission("lpc.colorcodes"),
+          player.hasPermission("lpc.rgbcodes")
+        );
+      }
+
+      return null;
+    });
+
+    var rendered = LegacyComponentSerializer.legacySection().deserialize(format);
+
+    event.renderer((source, sourceDisplayName, msg, audience) -> rendered);
   }
 
   // ================================================================================

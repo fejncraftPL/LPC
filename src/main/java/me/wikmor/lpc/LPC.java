@@ -128,6 +128,9 @@ public class LPC extends JavaPlugin implements Listener {
     // Enable colors on all placeholders but the message - LPC prefixes contain ampersand-sequences.
     format = enableColors(format, true, true);
 
+    if (getConfig().getBoolean("squeeze-spaces", false))
+      format = squeezeSpaces(format);
+
     // Colors are enabled based on player-permissions at the last stage of building the final format.
     format = replaceVariables(format, variableName -> {
       if (variableName.equals("message")) {
@@ -149,6 +152,29 @@ public class LPC extends JavaPlugin implements Listener {
   // ================================================================================
   // Algorithms (see test-cases)
   // ================================================================================
+
+  public static String squeezeSpaces(String input) {
+    StringBuilder result = null;
+    var previousSpace = false;
+
+    for (var charIndex = 0; charIndex < input.length(); charIndex++) {
+      var currentChar = input.charAt(charIndex);
+
+      if (currentChar == ' ' && previousSpace) {
+        if (result == null) {
+          result = new StringBuilder(input.length());
+          result.append(input, 0, charIndex);
+        }
+      }
+
+      else if (result != null)
+        result.append(currentChar);
+
+      previousSpace = currentChar == ' ';
+    }
+
+    return result != null ? result.toString() : input;
+  }
 
   public static String replaceVariables(String input, Function<String, @Nullable String> valueLookup) {
     var result = new StringBuilder(input.length());

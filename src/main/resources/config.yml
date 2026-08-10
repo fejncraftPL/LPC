@@ -17,6 +17,9 @@
 # More information can be found at https://www.spigotmc.org/resources/68965.
 chat-format: "{prefix}{name}&r: {message}"
 
+# Whether to squeeze multiple successive spaces into one
+squeeze-spaces: false
+
 # Set the format per group.
 # Note: Option for more advanced users. Remove comments to run.
 group-formats:
